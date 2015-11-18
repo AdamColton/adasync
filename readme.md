@@ -4,10 +4,6 @@ Simple directory synchronization.
 To use, set Rune Sync to run as a background task at boot. Rune Sync will periodically scan directories for new collections, out of date collections and collections that need to be synchronized.
 
 -- Todo --
-* tag directories
-** write tag
-** read tag
-** track dirty
 * resolve
 ** len = shorter
 ** ordering

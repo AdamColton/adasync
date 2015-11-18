@@ -156,6 +156,7 @@ type dirToP struct {
 
 func (dtp *dirToP) Execute() {
 	//After everything is copied, we sync up directories.
+	//I think we can do this earlier
 	dtp.dir.PathNodes.Last().Parent().directories[dtp.dir.ID.String()] = dtp.dir
 }
 
@@ -175,6 +176,55 @@ func (sync *Sync) ResolveDirectoryDifference(id string, startResolve int) {
 	}
 }
 
-func (sync *Sync) ResolveResourceDifference(id string, i int) {
+type MvRes struct {
+	src *Resource
+	dst *Resource
+}
 
+func (sync *Sync) ResolveResourceDifference(id string, i int) {
+	a := sync.a.resources[id]
+	b := sync.b.resources[id]
+
+	if len(a.PathNodes.nodes) == i {
+		sync.actions = append(sync.actions, &MvRes{
+			src: a,
+			dst: b,
+		})
+	} else if len(b.PathNodes.nodes) == i {
+		sync.actions = append(sync.actions, &MvRes{
+			src: b,
+			dst: a,
+		})
+	}
+
+}
+
+func (mvRes *MvRes) Execute() {
+	srcStr := mvRes.src.FullPath()
+	dstNd := mvRes.dst.PathNodes.Last()
+
+	copyNodes := false
+	if dstNd.ParentID == nil {
+		if dstNd.Name != ".deleted" {
+			panic("Bad Node")
+		} else if e := os.Remove(srcStr); err.Log(e) {
+			copyNodes = true
+		}
+	} else {
+		if e := os.Rename(srcStr, dstNd.FullPath()); err.Log(e) {
+			copyNodes = true
+		}
+	}
+
+	if copyNodes {
+		ins := mvRes.src.PathNodes.Last().Instance
+		for i := len(mvRes.src.PathNodes.nodes); i < len(mvRes.dst.PathNodes.nodes); i++ {
+			src := mvRes.dst.PathNodes.nodes[i]
+			mvRes.src.PathNodes.Add(&PathNode{
+				Name:     src.Name,
+				ParentID: src.ParentID,
+				Instance: ins,
+			})
+		}
+	}
 }

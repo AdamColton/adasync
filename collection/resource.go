@@ -23,6 +23,7 @@ type Directory struct {
 	*Resource
 	directories map[string]*Directory
 	resources   map[string]*Resource
+	tagged      bool
 }
 
 func (res *Resource) Serialize() *SerialResource {
@@ -87,12 +88,14 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	if len(pathNodes) == 0 {
 		panic("Cannot create Directory without path")
 	}
+	tagged := false
 	pns := NewPathNodes(0, pathNodes...)
 	var id *Hash
 	if tagFile, e := os.Open(pns.Last().FullPath() + ".tag.collection"); err.Check(e) {
 		idBuf := make([]byte, 16)
 		if l, e := tagFile.Read(idBuf); err.Log(e) && l == 16 {
 			id = HashFromBytes(idBuf)
+			tagged = true
 		}
 	}
 	if id == nil {
@@ -104,7 +107,8 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 			Hash:      hash,
 			PathNodes: pns,
 		},
-		directories: make(map[string]*Directory),
+		tagged:      tagged,
+		directories: make(map[string]*Directory), //maps the name to the directory, not the ID
 		resources:   make(map[string]*Resource),
 	}
 	ins.directories[dir.ID.String()] = dir
@@ -112,10 +116,12 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 }
 
 func (dir *Directory) WriteTag() {
-	tagFile, e := os.Create(dir.FullPath() + ".tag.collection")
-	if err.Log(e) {
-		defer tagFile.Close()
-		tagFile.Write(dir.ID[:])
-		//fmt.Println(dir.RelativePath().String(), dir.ID[:])
+	if !dir.tagged {
+		tagFile, e := os.Create(dir.FullPath() + ".tag.collection")
+		if err.Log(e) {
+			defer tagFile.Close()
+			tagFile.Write(dir.ID[:])
+			dir.tagged = true
+		}
 	}
 }

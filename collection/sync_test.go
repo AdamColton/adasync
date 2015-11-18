@@ -1,10 +1,13 @@
 package collection
 
 import (
+	"fmt"
 	"github.com/adamcolton/err"
 	"path/filepath"
 	"testing"
 )
+
+var _ = fmt.Println
 
 /*
 Note: may have an issue with directory selfSync.
@@ -38,20 +41,23 @@ func TestDiff(t *testing.T) {
 		b: insB,
 	}
 	sync.Diff()
-	flags := map[string]bool{
-		".deleted":    false,
-		"md5test.txt": false,
-	}
+	flags := map[string]string{}
 	for _, action := range sync.actions {
 		switch a := action.(type) {
 		case *CpRes:
-			flags[a.res.PathNodes.Last().Name] = true
+			flags[a.res.PathNodes.Last().Name] = "CpRes"
+		case *MvRes:
+			str := a.src.PathNodes.Last().Name + " -> " + a.dst.PathNodes.Last().Name
+			flags[str] = "MvRes"
 		}
 	}
-	if !flags[".deleted"] {
+	if flags[".deleted"] != "CpRes" {
 		t.Error("Missed '.deleted'")
 	}
-	if !flags["md5test.txt"] {
+	if flags["md5test.txt"] != "CpRes" {
 		t.Error("Missed 'md5test.txt'")
+	}
+	if flags["Moved.foo -> md5test2.txt"] != "MvRes" {
+		t.Error("Missed 'Moved.foo -> md5test2.txt'")
 	}
 }
