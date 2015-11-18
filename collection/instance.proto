@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package collection;
+
+message SerialPathNode {
+  bytes Name     = 1;
+  bytes ParentID = 2;
+}
+
+message SerialResource {
+           bytes          ID        = 1;
+           bytes          Hash      = 2;
+  repeated SerialPathNode PathNodes =3;
+}
+
+message SerialInstance {
+           bytes             CollectionId = 1;
+  repeated SerialResource    Resources    = 2;
+  repeated SerialResource    Directories  = 3;
+}
