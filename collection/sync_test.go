@@ -3,7 +3,10 @@ package collection
 import (
 	"fmt"
 	"github.com/adamcolton/err"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -20,9 +23,46 @@ need to check skipDir on .collection
 */
 
 func TestDiff(t *testing.T) {
-	c := New()
-	testPathA, e := filepath.Abs("../testCollectionA")
+	// copy the dirs
+	testPathA, e := filepath.Abs("../syncTestCollectionA")
 	err.Test(e, t)
+	testPathB, e := filepath.Abs("../syncTestCollectionB")
+	err.Test(e, t)
+	sourceA, e := filepath.Abs("../testCollectionA")
+	err.Test(e, t)
+	sourceB, e := filepath.Abs("../testCollectionB")
+	err.Test(e, t)
+	err.Test(os.RemoveAll(testPathA), t)
+	err.Test(os.RemoveAll(testPathB), t)
+	filepath.Walk(string(sourceA), func(sourceStr string, fi os.FileInfo, _ error) error {
+		dstStr := testPathA + strings.Replace(sourceStr, sourceA, "", -1)
+		if !fi.IsDir() {
+			dstFile, _ := os.Create(dstStr)
+			srcFile, _ := os.Open(sourceStr)
+			defer dstFile.Close()
+			defer srcFile.Close()
+			io.Copy(dstFile, srcFile)
+		} else {
+			os.Mkdir(dstStr, 0700)
+		}
+		return nil
+	})
+	filepath.Walk(string(sourceB), func(sourceStr string, fi os.FileInfo, _ error) error {
+		dstStr := testPathB + strings.Replace(sourceStr, sourceB, "", -1)
+		if !fi.IsDir() {
+			dstFile, _ := os.Create(dstStr)
+			srcFile, _ := os.Open(sourceStr)
+			defer dstFile.Close()
+			defer srcFile.Close()
+			io.Copy(dstFile, srcFile)
+		} else {
+			os.Mkdir(dstStr, 0700)
+		}
+		return nil
+	})
+
+	//start the test
+	c := New()
 	testPathA = filepath.ToSlash(testPathA)
 	insA := c.AddInstance(testPathA)
 
@@ -31,8 +71,6 @@ func TestDiff(t *testing.T) {
 	insA.AddResource(HashFromBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17}), insA.root, "deleted.bar")
 	insA.SelfUpdate()
 
-	testPathB, e := filepath.Abs("../testCollectionB")
-	err.Test(e, t)
 	testPathB = filepath.ToSlash(testPathB)
 	insB := c.AddInstance(testPathB)
 	insB.SelfUpdate()
@@ -49,6 +87,10 @@ func TestDiff(t *testing.T) {
 		case *MvRes:
 			str := a.cloneFrom.PathNodes.Last().Name + " -> " + a.cloneTo.PathNodes.Last().Name
 			flags[str] = "MvRes"
+		case *CpDir:
+			fmt.Println("FOO", a.dir.RelativePath().String())
+		default:
+			t.Error("Missed One")
 		}
 	}
 	if flags[".deleted"] != "CpRes" {
@@ -60,4 +102,6 @@ func TestDiff(t *testing.T) {
 	if flags["md5test2.txt -> Moved.foo"] != "MvRes" {
 		t.Error("Missed 'md5test2.txt -> Moved.foo'")
 	}
+
+	sync.Run()
 }

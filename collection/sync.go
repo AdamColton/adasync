@@ -69,6 +69,7 @@ func (sync *Sync) CopyResource(res *Resource, ins *Instance) {
 
 func (cpRes *CpRes) Execute() {
 	if cpRes.res.PathNodes.Last().Parent() == nil {
+		//TODO: Delete
 		cpRes.copyResData()
 	} else if cpRes.copyContents() {
 		cpRes.copyResData()
@@ -124,31 +125,31 @@ func (sync *Sync) MakeDirectory(dir *Directory, ins *Instance) {
 	})
 }
 
+// RESUME: only Mkdir if dir does not exist.
 func (cpDir *CpDir) Execute() {
 	dstStr := cpDir.ins.pathStr + cpDir.dir.RelativePath().String()
-	if e := os.Mkdir(dstStr, 0700); err.Log(e) {
-		pns := &PathNodes{
-			nodes: make([]*PathNode, len(cpDir.dir.PathNodes.nodes)),
-		}
-		for i, srcN := range cpDir.dir.PathNodes.nodes {
-			pns.nodes[i] = &PathNode{
-				Name:     srcN.Name,
-				ParentID: srcN.ParentID,
-				Instance: cpDir.ins,
-			}
-		}
-		dir := &Directory{
-			Resource: &Resource{
-				ID:        cpDir.dir.ID,
-				Hash:      cpDir.dir.Hash,
-				PathNodes: pns,
-			},
-			directories: make(map[string]*Directory),
-			resources:   make(map[string]*Resource),
-		}
-		cpDir.ins.directories[cpDir.dir.ID.String()] = dir
-		cpDir.sync.actions = append(cpDir.sync.actions, &dirToP{dir: dir})
+	os.Mkdir(dstStr, 0700)
+	pns := &PathNodes{
+		nodes: make([]*PathNode, len(cpDir.dir.PathNodes.nodes)),
 	}
+	for i, srcN := range cpDir.dir.PathNodes.nodes {
+		pns.nodes[i] = &PathNode{
+			Name:     srcN.Name,
+			ParentID: srcN.ParentID,
+			Instance: cpDir.ins,
+		}
+	}
+	dir := &Directory{
+		Resource: &Resource{
+			ID:        cpDir.dir.ID,
+			Hash:      cpDir.dir.Hash,
+			PathNodes: pns,
+		},
+		directories: make(map[string]*Directory),
+		resources:   make(map[string]*Resource),
+	}
+	cpDir.ins.directories[cpDir.dir.ID.String()] = dir
+	cpDir.sync.actions = append(cpDir.sync.actions, &dirToP{dir: dir})
 }
 
 type dirToP struct {
@@ -161,20 +162,10 @@ func (dtp *dirToP) Execute() {
 	dtp.dir.PathNodes.Last().Parent().directories[dtp.dir.ID.String()] = dtp.dir
 }
 
-func (sync *Sync) ResolveDirectoryDifference(id string, startResolve int) {
-	return
-	a := sync.a.resources[id]
-	//b := sync.b.resources[id]
-	masterPn := &PathNodes{
-		nodes: make([]*PathNode, startResolve),
-	}
-	for i := 0; i < startResolve; i++ {
-		n := a.PathNodes.nodes[i]
-		masterPn.nodes[i] = &PathNode{
-			Name:     n.Name,
-			ParentID: n.ParentID,
-		}
-	}
+func (sync *Sync) ResolveDirectoryDifference(id string, divergeStart int) {
+	a := sync.a.directories[id].Resource
+	b := sync.b.directories[id].Resource
+	sync.actions = append(sync.actions, resolveDifference(a, b, divergeStart))
 }
 
 // MvRes is actually move or delete, because we consider "deleted to be
@@ -188,7 +179,10 @@ type MvRes struct {
 func (sync *Sync) ResolveResourceDifference(id string, divergeStart int) {
 	a := sync.a.resources[id]
 	b := sync.b.resources[id]
+	sync.actions = append(sync.actions, resolveDifference(a, b, divergeStart))
+}
 
+func resolveDifference(a, b *Resource, divergeStart int) Action {
 	apn := a.PathNodes.Last()
 	bpn := b.PathNodes.Last()
 
@@ -226,19 +220,18 @@ func (sync *Sync) ResolveResourceDifference(id string, divergeStart int) {
 	} else if len(bpn.RelativePath().String()) > len(apn.RelativePath().String()) {
 		action = b2a
 	}
-	sync.actions = append(sync.actions, action)
+	return action
 }
 
 func (mvRes *MvRes) Execute() {
 	cloneFromStr := mvRes.cloneFrom.FullPath()
 	cloneToNode := mvRes.cloneTo.PathNodes.Last()
 
-	copyNodes := false
 	if cloneToNode.ParentID == nil {
 		if cloneToNode.Name != ".deleted" {
 			panic("Bad Node")
 		} else if e := os.Remove(cloneFromStr); err.Log(e) {
-			copyNodes = true
+			copyNodes(mvRes.cloneFrom.PathNodes, mvRes.cloneTo.PathNodes, mvRes.start)
 		}
 	} else {
 		//check that there isn't a file there, if there is, create a random prefix.
@@ -246,40 +239,38 @@ func (mvRes *MvRes) Execute() {
 		name := cloneToNode.Name
 		cloneToStr := cloneToStrRoot + name
 		for {
-			if _, err := os.Stat(cloneToStr); !os.IsNotExist(err) {
+			if _, err := os.Stat(cloneToStr); os.IsNotExist(err) {
 				// file exists
 				mod := make([]rune, 7)
-				for i := 1; i < 5; i++ {
+				for i := 1; i < 6; i++ {
 					mod[i] = rune((rand.Float32() * 24) + 65)
 				}
 				mod[0] = '0'
-				mod[5] = '_'
+				mod[6] = '_'
 				cloneToStr = cloneToStrRoot + string(mod) + name
 			} else {
 				break
 			}
 		}
 		if e := os.Rename(cloneFromStr, cloneToStr); err.Log(e) {
-			copyNodes = true
+			copyNodes(mvRes.cloneFrom.PathNodes, mvRes.cloneTo.PathNodes, mvRes.start)
 		}
 	}
+}
 
-	if copyNodes {
-		cloneFromPns := mvRes.cloneFrom.PathNodes
-		cloneToPns := mvRes.cloneTo.PathNodes
-		ins := cloneFromPns.Last().Instance //in theory, all in the instance values should be the same
-		for i := mvRes.start; i < len(cloneFromPns.nodes); i++ {
-			cloneFrom := cloneFromPns.nodes[i]
-			pn := &PathNode{
-				Name:     cloneFrom.Name,
-				ParentID: cloneFrom.ParentID,
-				Instance: ins,
-			}
-			if i > len(cloneToPns.nodes) {
-				cloneToPns.Add(pn)
-			} else {
-				cloneToPns.nodes[i] = pn
-			}
+func copyNodes(fromPns, toPns *PathNodes, start int) {
+	ins := fromPns.Last().Instance //in theory, all in the instance values should be the same
+	for i := start; i < len(fromPns.nodes); i++ {
+		cloneFrom := fromPns.nodes[i]
+		pn := &PathNode{
+			Name:     cloneFrom.Name,
+			ParentID: cloneFrom.ParentID,
+			Instance: ins,
+		}
+		if i >= len(toPns.nodes) {
+			toPns.Add(pn)
+		} else {
+			toPns.nodes[i] = pn
 		}
 	}
 }
