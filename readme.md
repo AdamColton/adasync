@@ -5,13 +5,13 @@ To use, set Rune Sync to run as a background task at boot. Rune Sync will period
 
 -- Todo --
 * resolve
-** len = shorter
-** ordering
-** one deletes
-** both delete
-** move (always go with the longer)
-* path collision (different resources want the same location)
+** Directory
+** move
+** delete
+* add retry on path collision
+* test path collision
 * has done sync: if we copy just the ID into an existing dir, it wont have dirTags. need to copy those by location, once we've done that onces, it can be used as a source. If we're the origin, this is set to true
+* add filelength checks, partial hash checks.
 
 possible issue with dirs: make sure that if I have a dir, rename it and add a new dir in the same location, they don't end up with the same ID
 

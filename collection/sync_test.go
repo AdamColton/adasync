@@ -47,7 +47,7 @@ func TestDiff(t *testing.T) {
 		case *CpRes:
 			flags[a.res.PathNodes.Last().Name] = "CpRes"
 		case *MvRes:
-			str := a.src.PathNodes.Last().Name + " -> " + a.dst.PathNodes.Last().Name
+			str := a.cloneFrom.PathNodes.Last().Name + " -> " + a.cloneTo.PathNodes.Last().Name
 			flags[str] = "MvRes"
 		}
 	}
@@ -57,7 +57,7 @@ func TestDiff(t *testing.T) {
 	if flags["md5test.txt"] != "CpRes" {
 		t.Error("Missed 'md5test.txt'")
 	}
-	if flags["Moved.foo -> md5test2.txt"] != "MvRes" {
-		t.Error("Missed 'Moved.foo -> md5test2.txt'")
+	if flags["md5test2.txt -> Moved.foo"] != "MvRes" {
+		t.Error("Missed 'md5test2.txt -> Moved.foo'")
 	}
 }

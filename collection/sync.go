@@ -3,6 +3,7 @@ package collection
 import (
 	"github.com/adamcolton/err"
 	"io"
+	"math/rand"
 	"os"
 )
 
@@ -176,55 +177,109 @@ func (sync *Sync) ResolveDirectoryDifference(id string, startResolve int) {
 	}
 }
 
+// MvRes is actually move or delete, because we consider "deleted to be
+// a virtual location
 type MvRes struct {
-	src *Resource
-	dst *Resource
+	cloneFrom *Resource
+	cloneTo   *Resource
+	start     int
 }
 
-func (sync *Sync) ResolveResourceDifference(id string, i int) {
+func (sync *Sync) ResolveResourceDifference(id string, divergeStart int) {
 	a := sync.a.resources[id]
 	b := sync.b.resources[id]
 
-	if len(a.PathNodes.nodes) == i {
-		sync.actions = append(sync.actions, &MvRes{
-			src: a,
-			dst: b,
-		})
-	} else if len(b.PathNodes.nodes) == i {
-		sync.actions = append(sync.actions, &MvRes{
-			src: b,
-			dst: a,
-		})
+	apn := a.PathNodes.Last()
+	bpn := b.PathNodes.Last()
+
+	a2b := &MvRes{
+		cloneFrom: a,
+		cloneTo:   b,
+		start:     divergeStart,
 	}
 
+	b2a := &MvRes{
+		cloneFrom: b,
+		cloneTo:   a,
+		start:     divergeStart,
+	}
+
+	action := Action(a2b)
+
+	// If divergeStart is equal to the length of one of the PathNode lists,
+	// that has highest priority; they were syncd at one point and then
+	// more has happened to the longer
+	// The next priority is if one of them was deleted, we choose the other
+	// If all else fails (neither is deleted and they have divergent histories)
+	// we choose which ever one has the longest relative path.
+	if len(a.PathNodes.nodes) == divergeStart {
+		action = b2a
+	} else if len(b.PathNodes.nodes) == divergeStart || bpn.ParentID == nil {
+		if bpn.ParentID == nil && bpn.Name != ".deleted" {
+			panic("Bad Node")
+		}
+	} else if apn.ParentID == nil {
+		if apn.Name != ".deleted" {
+			panic("Bad Node")
+		}
+		action = b2a
+	} else if len(bpn.RelativePath().String()) > len(apn.RelativePath().String()) {
+		action = b2a
+	}
+	sync.actions = append(sync.actions, action)
 }
 
 func (mvRes *MvRes) Execute() {
-	srcStr := mvRes.src.FullPath()
-	dstNd := mvRes.dst.PathNodes.Last()
+	cloneFromStr := mvRes.cloneFrom.FullPath()
+	cloneToNode := mvRes.cloneTo.PathNodes.Last()
 
 	copyNodes := false
-	if dstNd.ParentID == nil {
-		if dstNd.Name != ".deleted" {
+	if cloneToNode.ParentID == nil {
+		if cloneToNode.Name != ".deleted" {
 			panic("Bad Node")
-		} else if e := os.Remove(srcStr); err.Log(e) {
+		} else if e := os.Remove(cloneFromStr); err.Log(e) {
 			copyNodes = true
 		}
 	} else {
-		if e := os.Rename(srcStr, dstNd.FullPath()); err.Log(e) {
+		//check that there isn't a file there, if there is, create a random prefix.
+		cloneToStrRoot := cloneToNode.Parent().FullPath()
+		name := cloneToNode.Name
+		cloneToStr := cloneToStrRoot + name
+		for {
+			if _, err := os.Stat(cloneToStr); !os.IsNotExist(err) {
+				// file exists
+				mod := make([]rune, 7)
+				for i := 1; i < 5; i++ {
+					mod[i] = rune((rand.Float32() * 24) + 65)
+				}
+				mod[0] = '0'
+				mod[5] = '_'
+				cloneToStr = cloneToStrRoot + string(mod) + name
+			} else {
+				break
+			}
+		}
+		if e := os.Rename(cloneFromStr, cloneToStr); err.Log(e) {
 			copyNodes = true
 		}
 	}
 
 	if copyNodes {
-		ins := mvRes.src.PathNodes.Last().Instance
-		for i := len(mvRes.src.PathNodes.nodes); i < len(mvRes.dst.PathNodes.nodes); i++ {
-			src := mvRes.dst.PathNodes.nodes[i]
-			mvRes.src.PathNodes.Add(&PathNode{
-				Name:     src.Name,
-				ParentID: src.ParentID,
+		cloneFromPns := mvRes.cloneFrom.PathNodes
+		cloneToPns := mvRes.cloneTo.PathNodes
+		ins := cloneFromPns.Last().Instance //in theory, all in the instance values should be the same
+		for i := mvRes.start; i < len(cloneFromPns.nodes); i++ {
+			cloneFrom := cloneFromPns.nodes[i]
+			pn := &PathNode{
+				Name:     cloneFrom.Name,
+				ParentID: cloneFrom.ParentID,
 				Instance: ins,
-			})
+			}
+			if i > len(cloneToPns.nodes) {
+				cloneToPns.Add(pn)
+			} else {
+				cloneToPns.nodes[i] = pn
+			}
 		}
 	}
 }
