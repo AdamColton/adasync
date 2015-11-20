@@ -66,7 +66,6 @@ func TestSelfDiffAllThree(t *testing.T) {
 		t.Error(len(deleted.PathNodes.nodes))
 	}
 
-	//fmt.Println(ins.root.directories["subdir"].FullPath())
 }
 
 func TestSerialized(t *testing.T) {
@@ -86,13 +85,19 @@ func TestSerialized(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
-	c := New()
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
+	if _, err := os.Stat(testPath + "/.tag.collection"); !os.IsNotExist(err) {
+		os.Remove(testPath + "/.tag.collection")
+	}
+	c := New()
 	testPath = filepath.ToSlash(testPath)
 	ins := c.AddInstance(testPath)
 	ins.SelfUpdate()
 	ins.Write()
+	if _, err := os.Stat(testPath + "/.tag.collection"); !os.IsNotExist(err) {
+		//t.Error(".tag.collection file should not exist in root") //meh... maybe this is fine
+	}
 }
 
 func TestRead(t *testing.T) {

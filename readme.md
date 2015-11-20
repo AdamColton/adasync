@@ -4,20 +4,26 @@ Simple directory synchronization.
 To use, set Rune Sync to run as a background task at boot. Rune Sync will periodically scan directories for new collections, out of date collections and collections that need to be synchronized.
 
 -- Todo --
-* resolve
-** Directory
-** move
-** delete
-* add retry on path collision
-* test path collision
-* has done sync: if we copy just the ID into an existing dir, it wont have dirTags. need to copy those by location, once we've done that onces, it can be used as a source. If we're the origin, this is set to true
+* linux
+* mac
 * add filelength checks, partial hash checks.
+* add retry on path collision
+* has done sync: if we copy just the ID into an existing dir, it wont have dirTags. need to copy those by location, once we've done that onces, it can be used as a source. If we're the origin, this is set to true
+* write Config
+* For SyncAll, if there is an action, sync to all prev
+* dirty check for write
+* parser for settings
+* refactor collection Open
+* check that dir is still collection before diff
 
 possible issue with dirs: make sure that if I have a dir, rename it and add a new dir in the same location, they don't end up with the same ID
 
 -- Someday --
 * hide dot files on windows
-
+* Better recovery logic: small errors can ripple through, it would be good to have a brute force copy fall back
+* ftp
+* ssh
+* local network
 ### Tools
 * https://github.com/go-fsnotify/fsnotify : rough and out of date
 

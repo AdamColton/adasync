@@ -9,7 +9,7 @@ import (
 func TestScan(t *testing.T) {
 	runesyncRoot, e := filepath.Abs("../")
 	err.Test(e, t)
-	collections := scan([]string{runesyncRoot})
+	collections := Scan([]string{runesyncRoot})
 	if len(collections.paths) != 4 {
 		t.Error("Should have 4 collections, got:")
 		t.Error(len(collections.paths))

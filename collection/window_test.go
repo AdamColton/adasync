@@ -32,8 +32,8 @@ func TestScanDrives(t *testing.T) {
 func TestFullAndQuick(t *testing.T) {
 	t.Skip() //annoying test requiring human interaction
 	drives = make([]string, 0)
-	fmt.Println(FullScan())
+	fmt.Println(fullScan())
 	fmt.Println("Plug in drive")
 	time.Sleep(15 * time.Second)
-	fmt.Println(QuickScan())
+	fmt.Println(quickScan())
 }

@@ -2,11 +2,14 @@ package collection
 
 import (
 	"crypto/md5"
+	"fmt"
 	"github.com/adamcolton/err"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+var _ = fmt.Println
 
 // Path
 // instance should never end in /
@@ -54,6 +57,11 @@ func (p *Path) Stat() (*Hash, bool) {
 	stat, e := file.Stat()
 	err.Panic(e)
 	if stat.IsDir() {
+		if file, e := os.Open(p.String() + ".tag.collection"); e == nil {
+			buf := make([]byte, 16)
+			file.Read(buf)
+			return HashFromBytes(buf), true
+		}
 		ret := Hash(md5.Sum([]byte(p.relDir + p.name)))
 		return &ret, true
 	}
@@ -107,17 +115,6 @@ func (pns *PathNodes) Add(pn ...*PathNode) {
 	pns.nodes = append(pns.nodes, pn...)
 }
 
-func (ins *Instance) PathNode(parent *Directory, name string) *PathNode {
-	pn := &PathNode{
-		Name:     name,
-		Instance: ins,
-	}
-	if parent != nil {
-		pn.ParentID = parent.ID
-	}
-	return pn
-}
-
 func (pn *PathNode) IsDeleted() bool {
 	return pn.ParentID == nil && pn.Name == ".deleted"
 }
@@ -128,14 +125,6 @@ func (pns *PathNodes) marshal() []*SerialPathNode {
 		sPns[i] = pn.Serialize()
 	}
 	return sPns
-}
-
-func (ins *Instance) PathNodeFromHash(parentID *Hash, name string) *PathNode {
-	return &PathNode{
-		Name:     name,
-		ParentID: parentID,
-		Instance: ins,
-	}
 }
 
 func (pn *PathNode) Parent() *Directory {
@@ -188,20 +177,27 @@ func (pn *PathNode) FullPath() string {
 }
 
 func (pn *PathNode) Serialize() *SerialPathNode {
-	parentID := &Hash{}
+	parentID := []byte{0}
 	parent := pn.Parent()
 	if parent != nil {
-		parentID = parent.ID
+		parentID = parent.ID[:]
 	}
 	return &SerialPathNode{
 		Name:     []byte(pn.Name),
-		ParentID: parentID[:],
+		ParentID: parentID,
 	}
 }
 
 func (spn *SerialPathNode) unmarshal(ins *Instance) *PathNode {
+	parentID := spn.ParentID
+	var hash *Hash
+	if len(parentID) == 16 {
+		hash = HashFromBytes(parentID)
+	}
 	return &PathNode{
-		Name: string(spn.Name),
+		Name:     string(spn.Name),
+		ParentID: hash,
+		Instance: ins,
 	}
 }
 

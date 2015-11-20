@@ -149,6 +149,12 @@ func (cpDir *CpDir) Execute() {
 		resources:   make(map[string]*Resource),
 	}
 	cpDir.ins.directories[cpDir.dir.ID.String()] = dir
+	pn := dir.PathNodes.Last()
+	if parent := pn.Parent(); parent != nil {
+		parent.directories[pn.Name] = dir
+	} else {
+		panic("Should have parent")
+	}
 	cpDir.sync.actions = append(cpDir.sync.actions, &dirToP{dir: dir})
 }
 
@@ -168,8 +174,11 @@ func (sync *Sync) ResolveDirectoryDifference(id string, divergeStart int) {
 	sync.actions = append(sync.actions, resolveDifference(a, b, divergeStart))
 }
 
-// MvRes is actually move or delete, because we consider "deleted to be
+// MvRes is actually move or delete, because we consider "deleted" to be
 // a virtual location
+//
+// This keeps throwing me:
+// make "To" like "From" -> only change "To"
 type MvRes struct {
 	cloneFrom *Resource
 	cloneTo   *Resource
@@ -224,23 +233,30 @@ func resolveDifference(a, b *Resource, divergeStart int) Action {
 }
 
 func (mvRes *MvRes) Execute() {
-	cloneFromStr := mvRes.cloneFrom.FullPath()
+
+	cloneFromNode := mvRes.cloneFrom.PathNodes.Last()
 	cloneToNode := mvRes.cloneTo.PathNodes.Last()
 
-	if cloneToNode.ParentID == nil {
-		if cloneToNode.Name != ".deleted" {
+	if cloneFromNode.ParentID == nil {
+		if cloneFromNode.Name != ".deleted" {
 			panic("Bad Node")
-		} else if e := os.Remove(cloneFromStr); err.Log(e) {
+		} else if e := os.RemoveAll(cloneToNode.FullPath()); err.Log(e) {
 			copyNodes(mvRes.cloneFrom.PathNodes, mvRes.cloneTo.PathNodes, mvRes.start)
 		}
 	} else {
 		//check that there isn't a file there, if there is, create a random prefix.
-		cloneToStrRoot := cloneToNode.Parent().FullPath()
-		name := cloneToNode.Name
+		cloneToStrRoot := cloneToNode.Instance.pathStr
+		cloneToStrRoot += cloneFromNode.RelativePath().relDir
+		name := cloneFromNode.Name
 		cloneToStr := cloneToStrRoot + name
 		for {
 			if _, err := os.Stat(cloneToStr); os.IsNotExist(err) {
-				// file exists
+				// if the file does not exist, exit the loop
+				// use cloneToStr as the file name
+				break
+			} else {
+				// if the file file exists
+				// choose a ranodm modifier and prepend to the name
 				mod := make([]rune, 7)
 				for i := 1; i < 6; i++ {
 					mod[i] = rune((rand.Float32() * 24) + 65)
@@ -248,18 +264,16 @@ func (mvRes *MvRes) Execute() {
 				mod[0] = '0'
 				mod[6] = '_'
 				cloneToStr = cloneToStrRoot + string(mod) + name
-			} else {
-				break
 			}
 		}
-		if e := os.Rename(cloneFromStr, cloneToStr); err.Log(e) {
+		if e := os.Rename(cloneToNode.FullPath(), cloneToStr); err.Log(e) {
 			copyNodes(mvRes.cloneFrom.PathNodes, mvRes.cloneTo.PathNodes, mvRes.start)
 		}
 	}
 }
 
 func copyNodes(fromPns, toPns *PathNodes, start int) {
-	ins := fromPns.Last().Instance //in theory, all in the instance values should be the same
+	ins := toPns.Last().Instance //in theory, all in the instance values should be the same
 	for i := start; i < len(fromPns.nodes); i++ {
 		cloneFrom := fromPns.nodes[i]
 		pn := &PathNode{
@@ -272,5 +286,8 @@ func copyNodes(fromPns, toPns *PathNodes, start int) {
 		} else {
 			toPns.nodes[i] = pn
 		}
+	}
+	if len(toPns.nodes) > len(fromPns.nodes) {
+		toPns.nodes = toPns.nodes[:len(fromPns.nodes)]
 	}
 }

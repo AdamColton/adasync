@@ -1,6 +1,7 @@
 package collection
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +15,55 @@ we don't do anything for the intersection
 new paths need to be add
 missing paths are dropped.
 */
-func FullScan() []string {
-	return scan(full()).Slice()
+func fullScan() []string {
+	return Scan(full()).Slice()
 }
 
-func QuickScan() []string {
-	return scan(quick()).Slice()
+func FullScan() {
+	fs := Scan([]string{
+		"C:/Users/Adam/Documents/runesync",
+		"D:/runesync",
+	}).Slice()
+
+	//fs := fullScan()
+	for _, pathStr := range fs {
+		Open(pathStr)
+	}
+}
+
+func quickScan() []string {
+	return Scan(quick()).Slice()
+}
+
+func QuickScan() {
+	for _, pathStr := range quickScan() {
+		fmt.Println("Found new drive: ", pathStr)
+		Open(pathStr)
+	}
+}
+
+func SyncAll() {
+	for _, c := range collections {
+		var prev *Instance
+		for _, ins := range c.instances {
+			ins.SelfUpdate()
+			if prev != nil {
+				sync := Sync{
+					a:       ins,
+					b:       prev,
+					actions: make([]Action, 0),
+				}
+				sync.Diff()
+				sync.Run()
+			}
+			prev = ins
+		}
+	}
+	for _, c := range collections {
+		for _, ins := range c.instances {
+			ins.Write()
+		}
+	}
 }
 
 type CollectionPaths struct {
@@ -39,7 +83,7 @@ func (cp *CollectionPaths) Slice() []string {
 	return s
 }
 
-func scan(paths []string) *CollectionPaths {
+func Scan(paths []string) *CollectionPaths {
 	collectionPaths := &CollectionPaths{
 		paths: make(map[string]bool),
 	}
@@ -51,8 +95,17 @@ func scan(paths []string) *CollectionPaths {
 
 func (cp *CollectionPaths) AddIfCollection(subPath string, _ os.FileInfo, _ error) error {
 	subPath = filepath.ToSlash(subPath)
+	if ignLstStr, ok := Settings["ignore"]; ok {
+		ignLst := strings.Split(ignLstStr, ",")
+		for _, ignore := range ignLst {
+			if strings.HasPrefix(subPath, strings.Trim(ignore, " ")) {
+				return filepath.SkipDir
+			}
+		}
+	}
 	dir, file := filepath.Split(subPath)
-	if l := len(file); l >= 11 && strings.ToLower(file[l-11:]) == ".collection" {
+	file = strings.ToLower(file)
+	if file == "config.collection" || file == ".collection" {
 		cp.paths[dir] = true
 		return filepath.SkipDir
 	}

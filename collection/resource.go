@@ -1,9 +1,12 @@
 package collection
 
 import (
+	"fmt"
 	"github.com/adamcolton/err"
 	"os"
 )
+
+var _ = fmt.Println
 
 type Resource struct {
 	ID        *Hash
@@ -72,7 +75,7 @@ func (ins *Instance) AddResource(hash *Hash, parent *Directory, name string) *Re
 
 func (ins *Instance) AddResourceWithPath(hash *Hash, pathNodes ...*PathNode) *Resource {
 	res := &Resource{
-		ID:        ins.collection.generateResourceId(hash, pathNodes[0]),
+		ID:        ins.generateResourceId(hash, pathNodes[0]),
 		Hash:      hash,
 		PathNodes: NewPathNodes(0, pathNodes...),
 	}
@@ -91,7 +94,11 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	tagged := false
 	pns := NewPathNodes(0, pathNodes...)
 	var id *Hash
-	if tagFile, e := os.Open(pns.Last().FullPath() + ".tag.collection"); err.Check(e) {
+	pnsLast := pns.Last()
+	if l := len(pnsLast.Name); l == 0 || pnsLast.Name[l-1] != '/' {
+		panic("Bad directory name: " + pnsLast.Name)
+	}
+	if tagFile, e := os.Open(pnsLast.FullPath() + ".tag.collection"); err.Check(e) {
 		idBuf := make([]byte, 16)
 		if l, e := tagFile.Read(idBuf); err.Log(e) && l == 16 {
 			id = HashFromBytes(idBuf)
@@ -99,7 +106,7 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 		}
 	}
 	if id == nil {
-		id = ins.collection.generateResourceId(hash, pathNodes[0])
+		id = ins.generateResourceId(hash, pathNodes[0])
 	}
 	dir := &Directory{
 		Resource: &Resource{
@@ -112,6 +119,13 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 		resources:   make(map[string]*Resource),
 	}
 	ins.directories[dir.ID.String()] = dir
+	if pnsLast.ParentID == nil {
+		if pnsLast.Name != "/" && pnsLast.Name != ".deleted" {
+			panic("Bad Node: " + pnsLast.Name)
+		}
+	} else if parent, ok := ins.directories[pnsLast.ParentID.String()]; ok {
+		parent.directories[pnsLast.Name] = dir
+	}
 	return dir
 }
 
