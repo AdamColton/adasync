@@ -10,6 +10,12 @@ import (
 TODO: option to only scan new drives
 */
 
+var DefaultIgnore = "C:/Program Files, C:/Program Files (x86), C:/Windows"
+
+func osIgnore(path string) bool {
+	return len(path) > 4 && path[1:4] == ":/$"
+}
+
 // full returns all drives
 func full() []string {
 	detectDrives()

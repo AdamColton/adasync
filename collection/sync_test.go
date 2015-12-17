@@ -63,15 +63,15 @@ func TestDiff(t *testing.T) {
 
 	//start the test
 	c := New()
-	testPathA = filepath.ToSlash(testPathA)
+	testPathA = toSlash(testPathA)
 	insA := c.AddInstance(testPathA)
 
-	insA.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), insA.root, "md5test.txt")
-	insA.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), insA.root, "Moved.foo")
-	insA.AddResource(HashFromBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17}), insA.root, "deleted.bar")
+	insA.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), 0, insA.root, "md5test.txt")
+	insA.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), 0, insA.root, "Moved.foo")
+	insA.AddResource(HashFromBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17}), 0, insA.root, "deleted.bar")
 	insA.SelfUpdate()
 
-	testPathB = filepath.ToSlash(testPathB)
+	testPathB = toSlash(testPathB)
 	insB := c.AddInstance(testPathB)
 	insB.SelfUpdate()
 	sync := &Sync{
@@ -80,17 +80,19 @@ func TestDiff(t *testing.T) {
 	}
 	sync.Diff()
 	flags := map[string]string{}
-	for _, action := range sync.actions {
-		switch a := action.(type) {
-		case *CpRes:
-			flags[a.res.PathNodes.Last().Name] = "CpRes"
-		case *MvRes:
-			str := a.cloneFrom.PathNodes.Last().Name + " -> " + a.cloneTo.PathNodes.Last().Name
-			flags[str] = "MvRes"
-		case *CpDir:
-			fmt.Println("FOO", a.dir.RelativePath().String())
-		default:
-			t.Error("Missed One")
+	for _, actionList := range sync.actions {
+		for _, action := range actionList {
+			switch a := action.(type) {
+			case *CpRes:
+				flags[a.res.PathNodes.Last().Name] = "CpRes"
+			case *MvRes:
+				str := a.cloneFrom.PathNodes.Last().Name + " -> " + a.cloneTo.PathNodes.Last().Name
+				flags[str] = "MvRes"
+			case *CpDir:
+				fmt.Println("FOO", a.dir.RelativePath().String())
+			default:
+				t.Error("Missed One")
+			}
 		}
 	}
 	if flags[".deleted"] != "CpRes" {
@@ -104,4 +106,7 @@ func TestDiff(t *testing.T) {
 	}
 
 	sync.Run()
+
+	insA.BadInstanceScan()
+	insB.BadInstanceScan()
 }

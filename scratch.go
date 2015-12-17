@@ -2,9 +2,14 @@ package main
 
 import (
 	"./collection"
-	"fmt"
+	"github.com/adamcolton/err"
 )
 
 func main() {
-	fmt.Println(collection.FullScan())
+	err.DebugEnabled = true
+	collection.Open("C:/Users/Adam/Documents/adasync/test2")
+	collection.Open("D:/adasync/test")
+	collection.Open("G:/adasync/test3")
+	collection.SyncAll()
+	err.Debug("Done")
 }

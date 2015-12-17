@@ -1,7 +1,7 @@
 package collection
 
 import (
-	"fmt"
+	"github.com/adamcolton/err"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,13 +20,9 @@ func fullScan() []string {
 }
 
 func FullScan() {
-	fs := Scan([]string{
-		"C:/Users/Adam/Documents/runesync",
-		"D:/runesync",
-	}).Slice()
-
-	//fs := fullScan()
+	fs := fullScan()
 	for _, pathStr := range fs {
+		err.Debug("Found: ", pathStr)
 		Open(pathStr)
 	}
 }
@@ -37,26 +33,37 @@ func quickScan() []string {
 
 func QuickScan() {
 	for _, pathStr := range quickScan() {
-		fmt.Println("Found new drive: ", pathStr)
+		err.Debug("Found new drive: ", pathStr)
 		Open(pathStr)
 	}
 }
 
 func SyncAll() {
 	for _, c := range collections {
-		var prev *Instance
+		inss := make([]*Instance, len(c.instances))
+		idx := 0
 		for _, ins := range c.instances {
+			inss[idx] = ins
+			idx++
+		}
+		for i, ins := range inss {
 			ins.SelfUpdate()
-			if prev != nil {
+			for j, prev := range inss {
+				if j == i {
+					break
+				}
 				sync := Sync{
 					a:       ins,
 					b:       prev,
-					actions: make([]Action, 0),
+					actions: make(map[int][]Action),
 				}
+				err.Debug("Syncing: ", ins.pathStr)
+				err.Debug("     To: ", prev.pathStr)
 				sync.Diff()
-				sync.Run()
+				if !sync.Run() {
+					break
+				}
 			}
-			prev = ins
 		}
 	}
 	for _, c := range collections {
@@ -94,11 +101,15 @@ func Scan(paths []string) *CollectionPaths {
 }
 
 func (cp *CollectionPaths) AddIfCollection(subPath string, _ os.FileInfo, _ error) error {
-	subPath = filepath.ToSlash(subPath)
+	subPath = toSlash(subPath)
 	if ignLstStr, ok := Settings["ignore"]; ok {
-		ignLst := strings.Split(ignLstStr, ",")
+		if osIgnore(subPath) {
+			return filepath.SkipDir
+		}
+		ignLst := StringList(ignLstStr)
 		for _, ignore := range ignLst {
-			if strings.HasPrefix(subPath, strings.Trim(ignore, " ")) {
+			if len(ignore) > 0 && strings.HasPrefix(subPath, strings.Trim(ignore, " \n")) {
+				err.Debug("Ignoring: ", subPath)
 				return filepath.SkipDir
 			}
 		}

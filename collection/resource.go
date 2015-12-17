@@ -12,6 +12,7 @@ type Resource struct {
 	ID        *Hash
 	Hash      *Hash
 	PathNodes *PathNodes
+	Size      int64
 }
 
 func (r *Resource) RelativePath() *Path {
@@ -34,7 +35,22 @@ func (res *Resource) Serialize() *SerialResource {
 		ID:        res.ID[:],
 		Hash:      res.Hash[:],
 		PathNodes: res.PathNodes.marshal(),
+		Size:      res.Size,
 	}
+}
+
+func (res *Resource) Depth() int {
+	i := 0
+	pn := res.PathNodes.Last()
+	for {
+		parent := pn.Parent()
+		if parent == nil {
+			break
+		}
+		pn = parent.PathNodes.Last()
+		i++
+	}
+	return i
 }
 
 func (sRes *SerialResource) unmarshalInto(ins *Instance) *Resource {
@@ -46,6 +62,7 @@ func (sRes *SerialResource) unmarshalInto(ins *Instance) *Resource {
 		ID:        HashFromBytes(sRes.ID),
 		Hash:      HashFromBytes(sRes.Hash),
 		PathNodes: pns,
+		Size:      sRes.Size,
 	}
 	ins.resources[res.ID.String()] = res
 	return res
@@ -65,19 +82,28 @@ func (sRes *SerialResource) unmarshalDirInto(ins *Instance) *Directory {
 		directories: make(map[string]*Directory),
 		resources:   make(map[string]*Resource),
 	}
-	ins.directories[dir.Hash.String()] = dir
+	ins.directories[dir.ID.String()] = dir
 	return dir
 }
 
-func (ins *Instance) AddResource(hash *Hash, parent *Directory, name string) *Resource {
-	return ins.AddResourceWithPath(hash, ins.PathNode(parent, name))
+func (ins *Instance) AddResource(hash *Hash, size int64, parent *Directory, name string) *Resource {
+	return ins.AddResourceWithPath(hash, size, ins.PathNode(parent, name))
 }
 
-func (ins *Instance) AddResourceWithPath(hash *Hash, pathNodes ...*PathNode) *Resource {
+func (ins *Instance) AddResourceWithPath(hash *Hash, size int64, pathNodes ...*PathNode) *Resource {
 	res := &Resource{
 		ID:        ins.generateResourceId(hash, pathNodes[0]),
 		Hash:      hash,
 		PathNodes: NewPathNodes(0, pathNodes...),
+		Size:      size,
+	}
+	if old, ok := ins.resources[res.ID.String()]; ok {
+		//this (probably) means the resource was deleted and added again.
+		err.Debug(res.PathNodes.Last().FullPath())
+		old.Hash = res.Hash
+		old.Size = res.Size
+		old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
+		return old
 	}
 	ins.resources[res.ID.String()] = res
 	return res

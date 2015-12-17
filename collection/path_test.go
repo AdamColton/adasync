@@ -22,7 +22,7 @@ func TestMD5(t *testing.T) {
 		name:   "md5test2.txt",
 	}
 
-	hash1, isDir := file1.Stat()
+	hash1, isDir, _ := file1.Stat()
 	if len(hash1) != 16 {
 		t.Error("Wrong hash length")
 	}
@@ -30,7 +30,7 @@ func TestMD5(t *testing.T) {
 		t.Error("Is not dir")
 	}
 
-	hash2, _ := file2.Stat()
+	hash2, _, _ := file2.Stat()
 	expected := []byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}
 	for i, b := range expected {
 		if hash1[i] != b {
@@ -45,9 +45,13 @@ func TestMD5(t *testing.T) {
 }
 
 func TestPathFromString(t *testing.T) {
+	err.DebugEnabled = true
 	a := PathFromString("C:\\testing\\foo.txt", "C:/testing")
 	if a.root != "C:/testing" || a.relDir != "/" || a.name != "foo.txt" {
 		t.Error("Fail 1")
+		t.Error(a.root)
+		t.Error(a.relDir)
+		t.Error(a.name)
 	}
 	a = PathFromString("C:\\testing\\bar\\", "C:/testing")
 	if a.root != "C:/testing" || a.relDir != "/" || a.name != "bar/" {
@@ -56,17 +60,18 @@ func TestPathFromString(t *testing.T) {
 		t.Error(a.relDir)
 		t.Error(a.name)
 	}
+	err.DebugEnabled = false
 }
 
 func TestPathFromNode(t *testing.T) {
 	c := New()
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	ins := c.AddInstance(testPath)
 
 	hash := Hash([...]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10})
-	unchanged := ins.AddResource(&hash, ins.root, "unchanged.txt")
+	unchanged := ins.AddResource(&hash, 0, ins.root, "unchanged.txt")
 	path := unchanged.PathNodes.nodes[0].RelativePath()
 	if path.relDir != "/" {
 		t.Error("Incorrect relative directory")

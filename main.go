@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fmt"
-	"github.com/adamcolton/runesync/collection"
+	"github.com/adamcolton/adasync/collection"
+	"github.com/adamcolton/err"
+	"path/filepath"
 	"time"
 )
 
@@ -13,72 +14,56 @@ type Runable interface {
 type FullScan struct{}
 
 func (_ FullScan) Run() {
-	fmt.Println("-- Starting Full Scan --")
+	err.Debug("-- Starting Full Scan --")
 	collection.FullScan()
 }
 
 type QuickScan struct{}
 
 func (_ QuickScan) Run() {
-	fmt.Println("-- Checking for New Drives --")
+	err.Debug("-- Checking for New Drives --")
 	collection.QuickScan()
 }
-
-type NullOp struct{}
-
-func (_ NullOp) Run() {}
 
 type SyncAll struct{}
 
 func (_ SyncAll) Run() {
-	fmt.Println("-- Running Sync --")
+	err.Debug("-- Running Sync --")
 	collection.SyncAll()
 }
 
 func main() {
-	collection.Settings["ignore"] = "C:/$,C:/gopath/src/github.com/adamcolton,D:/$,C:/Windows,D:/Music,D:/Video,D:/SteamLibrary"
-	runChan := make(chan Runable, 10)
-	watchdog := true
+	err.DebugEnabled = true
+	path, e := filepath.Abs("./")
+	err.Panic(e)
+	path = filepath.ToSlash(path)
+	settings := collection.LoadConfig(path + "config.txt")
+	if ignore, ok := settings["ignore"]; ok {
+		collection.Settings["ignore"] = ignore
+		err.Debug("Ignoring: ", ignore)
+	} else {
+		collection.Settings["ignore"] = collection.DefaultIgnore
+		err.Debug("No ignore setting")
+	}
+	runChan := make(chan Runable, 100)
 	go func(runChan <-chan Runable) {
 		for {
 			run := <-runChan
 			run.Run()
-			watchdog = true
 		}
 	}(runChan)
-	start := time.Now()
-	runChan <- FullScan{}
-	runChan <- SyncAll{}
-	runChan <- NullOp{}
 
-	for {
-		if len(runChan) == 0 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
 	go func() {
-		fmt.Println("Starting watchdog")
 		for {
-			if !watchdog {
-				break
-			}
-			watchdog = false
-			time.Sleep(time.Second * 10)
+			time.Sleep(time.Minute * 5)
+			runChan <- QuickScan{}
+			runChan <- SyncAll{}
 		}
-		panic("Watchdog timed out")
 	}()
-	d := time.Since(start)
-	fmt.Println("Initial Scan complete: ", d.Seconds(), "seconds")
-	fmt.Println("Sync will run every 15 seconds")
 
 	for {
-		for i := 0; i < 3; i++ {
-			time.Sleep(time.Second * 5)
-			watchdog = true
-		}
-		//runChan <- QuickScan{}
 		runChan <- FullScan{}
 		runChan <- SyncAll{}
+		time.Sleep(time.Hour * 2)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/adamcolton/err"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,9 +34,12 @@ func TestSelfDiffAdded(t *testing.T) {
 
 	ins := c.AddInstance(testPath)
 	d := ins.SelfDiff()
-	if len(d.added) != 4 {
-		t.Error("Expected 4 files, got:")
+	if len(d.added) != 5 {
+		t.Error("Expected 5 files, got:")
 		t.Error(len(d.added))
+		for _, a := range d.added {
+			t.Error(a)
+		}
 	}
 }
 
@@ -43,12 +47,12 @@ func TestSelfDiffAllThree(t *testing.T) {
 	c := New()
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	ins := c.AddInstance(testPath)
 
-	unchanged := ins.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), ins.root, "md5test.txt")
-	moved := ins.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), ins.root, "Moved.foo")
-	deleted := ins.AddResource(HashFromBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17}), ins.root, "deleted.bar")
+	unchanged := ins.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), 0, ins.root, "md5test.txt")
+	moved := ins.AddResource(HashFromBytes([]byte{80, 246, 243, 125, 31, 47, 211, 96, 69, 20, 35, 235, 227, 207, 10, 10}), 0, ins.root, "Moved.foo")
+	deleted := ins.AddResource(HashFromBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17}), 0, ins.root, "deleted.bar")
 	ins.SelfUpdate()
 
 	if len(unchanged.PathNodes.nodes) != 1 {
@@ -72,16 +76,31 @@ func TestSerialized(t *testing.T) {
 	c := New()
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
-	ins := c.AddInstance(testPath)
-	ins.SelfUpdate()
-	b := ins.Marshal()
-	sIns := Unmarshal(b)
-	if !bytes.Equal(sIns.CollectionId, ins.collection.id) {
+	testPath = toSlash(testPath)
+	ins1 := c.AddInstance(testPath)
+	ins1.SelfUpdate()
+	b := ins1.Marshal()
+	ins2 := Unmarshal(b, testPath+"2") // can't use actual path or it will return a ref
+	if !bytes.Equal(ins2.collection.id, ins1.collection.id) {
 		t.Error("Collection IDs do not match")
-		fmt.Println(sIns.CollectionId)
-		fmt.Println(ins.collection.id)
+		fmt.Println(ins2.collection.id)
+		fmt.Println(ins1.collection.id)
 	}
+
+	if md5test, ok := ins2.resources["rbHFRphzUsms0DGyOENzmg=="]; ok {
+		if !strings.HasSuffix(md5test.FullPath(), "/testCollectionA2/subdir/test.txt") {
+			t.Error("Bad path for subdir/test.txt")
+			t.Error(md5test.FullPath())
+		}
+	} else {
+		t.Error("Did not find subdir/test.txt")
+		for hash, res := range ins2.resources {
+			t.Error(hash, res.PathNodes.Last().Name)
+		}
+	}
+
+	ins2.BadInstanceScan()
+
 }
 
 func TestWrite(t *testing.T) {
@@ -91,51 +110,59 @@ func TestWrite(t *testing.T) {
 		os.Remove(testPath + "/.tag.collection")
 	}
 	c := New()
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	ins := c.AddInstance(testPath)
 	ins.SelfUpdate()
 	ins.Write()
 	if _, err := os.Stat(testPath + "/.tag.collection"); !os.IsNotExist(err) {
-		//t.Error(".tag.collection file should not exist in root") //meh... maybe this is fine
+		t.Error(".tag.collection file should not exist in root")
+		t.Error(testPath)
+		os.Remove(testPath + "/.tag.collection")
 	}
 }
 
 func TestRead(t *testing.T) {
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	colFile, e := os.Open(testPath + "/.collection")
 	defer colFile.Close()
 	err.Test(e, t)
 	b := make([]byte, 1024)
 	l, e := colFile.Read(b)
 	err.Test(e, t)
-	sIns := Unmarshal(b[:l])
-	if len(sIns.Resources) != 3 {
+	ins := Unmarshal(b[:l], testPath)
+	if len(ins.resources) != 4 {
 		t.Error("Wrong number of resources")
-		t.Error(len(sIns.Resources))
+		t.Error(len(ins.resources))
+		for _, i := range ins.resources {
+			t.Error(i.FullPath())
+		}
 	}
-	if len(sIns.Directories) != 1 {
+	if len(ins.directories) != 2 {
 		t.Error("Wrong number of directories")
-		t.Error(len(sIns.Directories))
+		t.Error(len(ins.directories))
 	}
 }
 
 func TestOpen(t *testing.T) {
 	testPath, e := filepath.Abs("../testCollectionA")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	ins := Open(testPath)
-	if len(ins.resources) != 3 {
+	if len(ins.resources) != 4 {
 		t.Error("Wrong number of resources.")
 		t.Error(len(ins.resources))
+		for _, i := range ins.resources {
+			t.Error(i.FullPath())
+		}
 	}
 }
 
 func TestOpenOnDNE(t *testing.T) {
 	testPath, e := filepath.Abs("./")
 	err.Test(e, t)
-	testPath = filepath.ToSlash(testPath)
+	testPath = toSlash(testPath)
 	ins := Open(testPath)
 	if len(ins.resources) != 0 {
 		t.Error("Wrong number of resources.")

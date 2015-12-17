@@ -1,4 +1,5 @@
 syntax = "proto3";
+//protoc --go_out=./ instance.proto
 
 package collection;
 
@@ -10,11 +11,17 @@ message SerialPathNode {
 message SerialResource {
            bytes          ID        = 1;
            bytes          Hash      = 2;
-  repeated SerialPathNode PathNodes =3;
+  repeated SerialPathNode PathNodes = 3;
+           int64          Size      = 4;
 }
 
 message SerialInstance {
            bytes             CollectionId = 1;
   repeated SerialResource    Resources    = 2;
   repeated SerialResource    Directories  = 3;
+}
+
+message VersionWrapper {
+  uint32 Version  = 1;
+  bytes  Instance = 2;
 }

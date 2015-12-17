@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"path/filepath"
 )
 
 var _ = fmt.Println
@@ -36,7 +35,7 @@ func New(id ...byte) *Collection {
 }
 
 func (c *Collection) AddInstance(pathStr string) *Instance {
-	pathStr = filepath.ToSlash(pathStr)
+	pathStr = toSlash(pathStr)
 	ins := &Instance{
 		collection:  c,
 		pathStr:     pathStr,

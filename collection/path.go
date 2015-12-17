@@ -26,8 +26,8 @@ func (p *Path) String() string {
 }
 
 func PathFromString(fullpathStr, root string) *Path {
-	fullpathStr = filepath.ToSlash(fullpathStr)
-	root = filepath.ToSlash(root)
+	fullpathStr = toSlash(fullpathStr)
+	root = toSlash(root)
 	relPathStr := strings.Replace(fullpathStr, root, "", -1)
 	dir, name := split(relPathStr)
 	return &Path{
@@ -35,6 +35,10 @@ func PathFromString(fullpathStr, root string) *Path {
 		relDir: dir,
 		name:   name,
 	}
+}
+
+func toSlash(path string) string {
+	return filepath.ToSlash(strings.Replace(path, "\\", "/", -1))
 }
 
 func split(path string) (string, string) {
@@ -50,7 +54,7 @@ func split(path string) (string, string) {
 var blocksize = int64(md5.BlockSize)
 
 //MD5 efficiently finds the MD5 hash of the file at path
-func (p *Path) Stat() (*Hash, bool) {
+func (p *Path) Stat() (*Hash, bool, int64) {
 	file, e := os.Open(p.String())
 	err.Panic(e)
 	defer file.Close()
@@ -60,10 +64,10 @@ func (p *Path) Stat() (*Hash, bool) {
 		if file, e := os.Open(p.String() + ".tag.collection"); e == nil {
 			buf := make([]byte, 16)
 			file.Read(buf)
-			return HashFromBytes(buf), true
+			return HashFromBytes(buf), true, 0
 		}
 		ret := Hash(md5.Sum([]byte(p.relDir + p.name)))
-		return &ret, true
+		return &ret, true, 0
 	}
 	hash := md5.New()
 	blocks := stat.Size() / blocksize
@@ -83,7 +87,7 @@ func (p *Path) Stat() (*Hash, bool) {
 	for i, b := range sliceHash {
 		ret[i] = b
 	}
-	return &ret, false
+	return &ret, false, stat.Size()
 }
 
 type PathNode struct {
@@ -117,14 +121,6 @@ func (pns *PathNodes) Add(pn ...*PathNode) {
 
 func (pn *PathNode) IsDeleted() bool {
 	return pn.ParentID == nil && pn.Name == ".deleted"
-}
-
-func (pns *PathNodes) marshal() []*SerialPathNode {
-	sPns := make([]*SerialPathNode, len(pns.nodes))
-	for i, pn := range pns.nodes {
-		sPns[i] = pn.Serialize()
-	}
-	return sPns
 }
 
 func (pn *PathNode) Parent() *Directory {
@@ -186,6 +182,14 @@ func (pn *PathNode) Serialize() *SerialPathNode {
 		Name:     []byte(pn.Name),
 		ParentID: parentID,
 	}
+}
+
+func (pns *PathNodes) marshal() []*SerialPathNode {
+	sPns := make([]*SerialPathNode, len(pns.nodes))
+	for i, pn := range pns.nodes {
+		sPns[i] = pn.Serialize()
+	}
+	return sPns
 }
 
 func (spn *SerialPathNode) unmarshal(ins *Instance) *PathNode {

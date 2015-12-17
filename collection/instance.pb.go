@@ -12,6 +12,7 @@ It has these top-level messages:
 	SerialPathNode
 	SerialResource
 	SerialInstance
+	VersionWrapper
 */
 package collection
 
@@ -37,6 +38,7 @@ type SerialResource struct {
 	ID        []byte            `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	Hash      []byte            `protobuf:"bytes,2,opt,name=Hash,proto3" json:"Hash,omitempty"`
 	PathNodes []*SerialPathNode `protobuf:"bytes,3,rep,name=PathNodes" json:"PathNodes,omitempty"`
+	Size      int64             `protobuf:"varint,4,opt,name=Size" json:"Size,omitempty"`
 }
 
 func (m *SerialResource) Reset()         { *m = SerialResource{} }
@@ -73,3 +75,12 @@ func (m *SerialInstance) GetDirectories() []*SerialResource {
 	}
 	return nil
 }
+
+type VersionWrapper struct {
+	Version  uint32 `protobuf:"varint,1,opt,name=Version" json:"Version,omitempty"`
+	Instance []byte `protobuf:"bytes,2,opt,name=Instance,proto3" json:"Instance,omitempty"`
+}
+
+func (m *VersionWrapper) Reset()         { *m = VersionWrapper{} }
+func (m *VersionWrapper) String() string { return proto.CompactTextString(m) }
+func (*VersionWrapper) ProtoMessage()    {}
