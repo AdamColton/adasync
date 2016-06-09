@@ -4,7 +4,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/adamcolton/runesync/collection"
+	"github.com/adamcolton/adasync/adasync"
 	"time"
 )
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/adamcolton/adasync/collection"
+	"github.com/adamcolton/adasync/adasync"
 	"github.com/adamcolton/err"
 	"os"
 	"path/filepath"

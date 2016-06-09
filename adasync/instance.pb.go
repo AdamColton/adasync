@@ -14,7 +14,7 @@ It has these top-level messages:
 	SerialInstance
 	VersionWrapper
 */
-package collection
+package adasync
 
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"

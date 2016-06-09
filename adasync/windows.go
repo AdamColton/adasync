@@ -1,6 +1,6 @@
 // +build windows
 
-package collection
+package adasync
 
 /*
 TODO: option to only scan new drives
@@ -33,7 +33,7 @@ func detectDrives() ([]string, []string) {
 	i := 0
 	for letter := 'A'; letter <= 'Z'; letter++ {
 		path := string(letter) + ":\\"
-		if _, e := fs.Open(path); e != nil {
+		if _, e := filesystem.Open(path); e != nil {
 			continue
 		}
 		drvs = append(drvs, path)

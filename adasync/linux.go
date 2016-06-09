@@ -1,6 +1,6 @@
-// +build darwin
+// +build linux
 
-package collection
+package adasync
 
 import (
 	"github.com/adamcolton/err"
@@ -22,7 +22,7 @@ func full() []string {
 
 // quick returns only new drives that have appeared since last scan
 func quick() []string {
-	return findMedia([]string{"/Volumes/"})
+	return findMedia([]string{"/media/"})
 }
 
 func findMedia(paths []string) []string {
@@ -44,7 +44,7 @@ var media = []string{}
 func (lp *linuxPaths) getMedia(subPath string, _ os.FileInfo, _ error) error {
 	segments := strings.Split(subPath, "/")
 	if len(segments) == 4 {
-		if stat, e := fs.Stat(subPath); err.Log(e) && stat.IsDir() {
+		if stat, e := filesystem.Stat(subPath); err.Log(e) && stat.IsDir() {
 			lp.all = append(lp.all, subPath)
 			isNew := true
 			for _, path := range media {

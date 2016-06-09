@@ -13,11 +13,10 @@ To use, set Rune Sync to run as a background task at boot. Rune Sync will period
 ** device
 
 -- Bugs --
-Add folder with content, sync. Rename folder in A. Folder in B is deleted on first pass, syncs on second. It looks like the rename is not registering as a move.
-
-Also, all children are being registered as missing, when we detect a dir move, we need to update that the children moved.
 
 It might be better to do a tag check when we encounter a directory...
+
+I have no idea what the hell I was thinking - but directory tags are screwed up. I thought that for a directory, the hash and the ID are always the same thing, but they are not. And when I write the tag, I'm using the ID, but checking it like it's the hash. I've mostly got it working, but I want to go back and make it consistent.
 
 -- Todo --
 * when checking a file, we could potentially compute the hash twice, that seems wasteful

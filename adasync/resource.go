@@ -1,4 +1,4 @@
-package collection
+package adasync
 
 import (
 	"fmt"
@@ -128,7 +128,7 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	if l := len(pnsLast.Name); l == 0 || pnsLast.Name[l-1] != '/' {
 		panic("Bad directory name: " + pnsLast.Name)
 	}
-	if tagFile, e := fs.Open(pnsLast.FullPath() + ".tag.collection"); err.Check(e) {
+	if tagFile, e := filesystem.Open(pnsLast.FullPath() + ".tag.collection"); err.Check(e) {
 		defer tagFile.Close()
 		idBuf := make([]byte, 16)
 		if l, e := tagFile.Read(idBuf); err.Log(e) && l == 16 {
@@ -139,13 +139,13 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	if id == nil {
 		id = ins.generateResourceId(hash, pathNodes[0])
 	}
-  if old, ok := ins.directories[id.String()]; ok {
-    //this (probably) means the directory was deleted and added again.
-    old.tagged = tagged
-    old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
-    err.Debug(old.PathNodes.Last().FullPath())
-    return old
-  }
+	if old, ok := ins.directories[id.String()]; ok {
+		//this (probably) means the directory was deleted and added again.
+		old.tagged = tagged
+		old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
+		err.Debug(old.PathNodes.Last().FullPath())
+		return old
+	}
 	dir := &Directory{
 		Resource: &Resource{
 			ID:        id,
@@ -169,9 +169,10 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 
 func (dir *Directory) WriteTag() {
 	if pn := dir.PathNodes.Last(); !dir.tagged && !pn.IsDeleted() {
-		tagFile, e := fs.Create(dir.FullPath() + ".tag.collection")
+		tagFile, e := filesystem.Create(dir.FullPath() + ".tag.collection")
 		if err.Log(e) {
 			defer tagFile.Close()
+			err.Debug(dir.ID, dir.Hash)
 			tagFile.Write(dir.ID[:])
 			dir.tagged = true
 		}

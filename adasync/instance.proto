@@ -1,7 +1,7 @@
 syntax = "proto3";
 //protoc --go_out=./ instance.proto
 
-package collection;
+package adasync;
 
 message SerialPathNode {
   bytes Name     = 1;

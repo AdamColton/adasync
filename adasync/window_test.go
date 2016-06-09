@@ -1,6 +1,6 @@
 // +build windows
 
-package collection
+package adasync
 
 import (
 	"fmt"

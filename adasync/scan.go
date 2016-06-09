@@ -1,4 +1,4 @@
-package collection
+package adasync
 
 import (
 	"github.com/adamcolton/err"
@@ -20,8 +20,8 @@ func fullScan() []string {
 }
 
 func FullScan() {
-	fs := fullScan()
-	for _, pathStr := range fs {
+	scan := fullScan()
+	for _, pathStr := range scan {
 		err.Debug("Found: ", pathStr)
 		Open(pathStr)
 	}

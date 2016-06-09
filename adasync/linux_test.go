@@ -1,6 +1,6 @@
 // +build linux
 
-package collection
+package adasync
 
 import (
 	"testing"

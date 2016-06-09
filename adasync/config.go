@@ -1,4 +1,4 @@
-package collection
+package adasync
 
 import (
 	"bufio"
@@ -10,7 +10,7 @@ import (
 func LoadConfig(pathStr string) (map[string]string, error) {
 	settings := make(map[string]string)
 	eOut := error(nil)
-	if configFile, e := fs.Open(pathStr); err.Check(e) {
+	if configFile, e := filesystem.Open(pathStr); err.Check(e) {
 		defer configFile.Close()
 		ParseConfig(configFile, settings)
 	} else {

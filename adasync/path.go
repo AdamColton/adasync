@@ -1,4 +1,4 @@
-package collection
+package adasync
 
 import (
 	"crypto/md5"
@@ -54,17 +54,19 @@ var blocksize = int64(md5.BlockSize)
 
 //MD5 efficiently finds the MD5 hash of the file at path
 func (p *Path) Stat() (*Hash, bool, int64) {
-	file, e := fs.Open(p.String())
+	file, e := filesystem.Open(p.String())
 	err.Panic(e)
 	defer file.Close()
 	stat, e := file.Stat()
 	err.Panic(e)
 	if stat.IsDir() {
-		if file, e := fs.Open(p.String() + ".tag.collection"); e == nil {
-      defer file.Close()
+		if file, e := filesystem.Open(p.String() + ".tag.collection"); e == nil {
+			defer file.Close()
 			buf := make([]byte, 16)
 			file.Read(buf)
-			return HashFromBytes(buf), true, 0
+			h := HashFromBytes(buf)
+			err.Debug(h)
+			return h, true, 0
 		}
 		ret := Hash(md5.Sum([]byte(p.relDir + p.name)))
 		return &ret, true, 0
@@ -213,3 +215,16 @@ type ByLength []string
 func (a ByLength) Len() int           { return len(a) }
 func (a ByLength) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByLength) Less(i, j int) bool { return len(a[i]) < len(a[j]) }
+
+func endsWith(path, ending string) bool {
+	pathLen := len(path)
+	endingLen := len(ending)
+	return pathLen >= endingLen && strings.ToLower(path[pathLen-endingLen:]) == ending
+}
+
+func endingSlash(path string) string {
+	if path[len(path)-1] != '/' {
+		return path + "/"
+	}
+	return path
+}

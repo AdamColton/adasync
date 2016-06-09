@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./collection"
+	"github.com/adamcolton/adasync/adasync"
 	"github.com/adamcolton/err"
 	"path/filepath"
 )
@@ -14,13 +14,13 @@ It will scan all subdirectories and sync them.
 func main() {
 	err.DebugOut = err.Stdout
 	thisPath, _ := filepath.Abs(".")
-	cols := collection.Scan([]string{
+	cols := adasync.Scan([]string{
 		thisPath,
 	}).Slice()
 	for _, pathStr := range cols {
 		err.Debug("Found: ", pathStr)
-		collection.Open(pathStr)
+		adasync.Open(pathStr)
 	}
-	collection.SyncAll()
+	adasync.SyncAll()
 	err.Debug("Done")
 }

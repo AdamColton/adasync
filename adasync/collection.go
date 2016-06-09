@@ -1,9 +1,12 @@
-package collection
+package adasync
 
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"github.com/adamcolton/fs"
 )
+
+var filesystem = fs.Std
 
 var Settings = map[string]string{}
 
