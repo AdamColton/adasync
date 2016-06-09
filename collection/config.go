@@ -4,38 +4,52 @@ import (
 	"bufio"
 	"github.com/adamcolton/err"
 	"io"
-	"os"
 	"strings"
 )
 
-func LoadConfig(pathStr string) map[string]string {
+func LoadConfig(pathStr string) (map[string]string, error) {
 	settings := make(map[string]string)
-	if configFile, e := os.Open(pathStr); err.Check(e) {
+	eOut := error(nil)
+	if configFile, e := fs.Open(pathStr); err.Check(e) {
 		defer configFile.Close()
-		reader := bufio.NewReader(configFile)
-		for {
-			lineBytes, e := reader.ReadBytes('\n')
-			if e != io.EOF && e != nil {
-				err.Panic(e)
+		ParseConfig(configFile, settings)
+	} else {
+		eOut = e
+	}
+	return settings, eOut
+}
+
+func ParseConfig(config io.Reader, settings map[string]string) {
+	reader := bufio.NewReader(config)
+	for {
+		lineBytes, e := reader.ReadBytes('\n')
+		if e != io.EOF && e != nil {
+			err.Panic(e)
+		}
+		line := trimWs(string(lineBytes))
+		setting := strings.SplitN(line, ":", 2)
+		if len(line) > 0 && line[0] != '#' {
+			if len(setting) == 1 {
+				setting = append(setting, "true") // anything
 			}
-			line := trimWs(string(lineBytes))
-			setting := strings.SplitN(line, ":", 2)
-			if len(line) > 0 && line[0] != '#' && len(setting) == 2 {
-				settings[trimWs(strings.ToLower(setting[0]))] = trimWs(setting[1])
-			}
-			if e == io.EOF {
-				break
+			key := trimWs(strings.ToLower(setting[0]))
+			if key != "" {
+				val := trimWs(setting[1])
+				settings[key] = val
 			}
 		}
+		if e == io.EOF {
+			break
+		}
 	}
-	return settings
 }
 
 func trimWs(str string) string {
 	return strings.Trim(str, " \n\t")
 }
 
-// StringList converts a string into a list of strings
+// StringList converts a string into a list of strings splitting on comma but
+// allowing \, to escape the comma
 func StringList(strLst string) []string {
 	out := make([]string, 0)
 	s := 0

@@ -48,22 +48,25 @@ func SyncAll() {
 		}
 		for i, ins := range inss {
 			ins.SelfUpdate()
-			for j, prev := range inss {
-				if j == i {
-					break
-				}
-				sync := Sync{
-					a:       ins,
-					b:       prev,
-					actions: make(map[int][]Action),
-				}
-				err.Debug("Syncing: ", ins.pathStr)
-				err.Debug("     To: ", prev.pathStr)
-				sync.Diff()
-				if !sync.Run() {
-					break
+			if ins.dirty || ins.isNew {
+				for j, prev := range inss {
+					if j == i {
+						break
+					}
+					sync := Sync{
+						a:       ins,
+						b:       prev,
+						actions: make(map[int][]Action),
+					}
+					err.Debug("Syncing: ", ins.pathStr)
+					err.Debug("     To: ", prev.pathStr)
+					sync.Diff()
+					if !sync.Run() {
+						break
+					}
 				}
 			}
+			ins.isNew = false
 		}
 	}
 	for _, c := range collections {

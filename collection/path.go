@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/adamcolton/err"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -55,13 +54,14 @@ var blocksize = int64(md5.BlockSize)
 
 //MD5 efficiently finds the MD5 hash of the file at path
 func (p *Path) Stat() (*Hash, bool, int64) {
-	file, e := os.Open(p.String())
+	file, e := fs.Open(p.String())
 	err.Panic(e)
 	defer file.Close()
 	stat, e := file.Stat()
 	err.Panic(e)
 	if stat.IsDir() {
-		if file, e := os.Open(p.String() + ".tag.collection"); e == nil {
+		if file, e := fs.Open(p.String() + ".tag.collection"); e == nil {
+      defer file.Close()
 			buf := make([]byte, 16)
 			file.Read(buf)
 			return HashFromBytes(buf), true, 0
@@ -137,6 +137,7 @@ func (a *PathNodes) DiffAt(b *PathNodes) int {
 	ret := -1
 	l := la
 	if la != lb {
+		err.Debug(la, lb)
 		if la > lb {
 			l = lb
 		}
@@ -144,8 +145,10 @@ func (a *PathNodes) DiffAt(b *PathNodes) int {
 	}
 	for i := 0; i < l; i++ {
 		na := a.nodes[i]
-		nb := a.nodes[i]
+		nb := b.nodes[i]
 		if na.Name != nb.Name || !na.ParentID.Equal(nb.ParentID) {
+			err.Debug(na.Name, nb.Name)
+			err.Debug(na.ParentID, nb.ParentID)
 			return i
 		}
 	}

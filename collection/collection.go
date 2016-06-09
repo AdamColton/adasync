@@ -3,10 +3,7 @@ package collection
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 )
-
-var _ = fmt.Println
 
 var Settings = map[string]string{}
 
@@ -42,6 +39,7 @@ func (c *Collection) AddInstance(pathStr string) *Instance {
 		resources:   make(map[string]*Resource),
 		directories: make(map[string]*Directory),
 		settings:    make(map[string]string),
+		isNew:       true,
 	}
 	hash := &Hash{}
 	ins.root = ins.AddDirectory(hash, nil, "/")

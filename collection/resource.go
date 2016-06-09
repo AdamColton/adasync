@@ -3,7 +3,6 @@ package collection
 import (
 	"fmt"
 	"github.com/adamcolton/err"
-	"os"
 )
 
 var _ = fmt.Println
@@ -39,6 +38,9 @@ func (res *Resource) Serialize() *SerialResource {
 	}
 }
 
+// Depth returns the directory depth of the resource
+// This is used for syncing to make sure we sync all the folders in a directory
+// before we start syncing their contents
 func (res *Resource) Depth() int {
 	i := 0
 	pn := res.PathNodes.Last()
@@ -78,6 +80,7 @@ func (sRes *SerialResource) unmarshalDirInto(ins *Instance) *Directory {
 			ID:        HashFromBytes(sRes.ID),
 			Hash:      HashFromBytes(sRes.Hash),
 			PathNodes: pns,
+			Size:      sRes.Size,
 		},
 		directories: make(map[string]*Directory),
 		resources:   make(map[string]*Resource),
@@ -91,19 +94,20 @@ func (ins *Instance) AddResource(hash *Hash, size int64, parent *Directory, name
 }
 
 func (ins *Instance) AddResourceWithPath(hash *Hash, size int64, pathNodes ...*PathNode) *Resource {
+	resId := ins.generateResourceId(hash, pathNodes[0])
+	if old, ok := ins.resources[resId.String()]; ok {
+		//this (probably) means the resource was deleted and added again.
+		old.Hash = hash
+		old.Size = size
+		old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
+		err.Debug(old.PathNodes.Last().FullPath())
+		return old
+	}
 	res := &Resource{
-		ID:        ins.generateResourceId(hash, pathNodes[0]),
+		ID:        resId,
 		Hash:      hash,
 		PathNodes: NewPathNodes(0, pathNodes...),
 		Size:      size,
-	}
-	if old, ok := ins.resources[res.ID.String()]; ok {
-		//this (probably) means the resource was deleted and added again.
-		err.Debug(res.PathNodes.Last().FullPath())
-		old.Hash = res.Hash
-		old.Size = res.Size
-		old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
-		return old
 	}
 	ins.resources[res.ID.String()] = res
 	return res
@@ -124,7 +128,8 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	if l := len(pnsLast.Name); l == 0 || pnsLast.Name[l-1] != '/' {
 		panic("Bad directory name: " + pnsLast.Name)
 	}
-	if tagFile, e := os.Open(pnsLast.FullPath() + ".tag.collection"); err.Check(e) {
+	if tagFile, e := fs.Open(pnsLast.FullPath() + ".tag.collection"); err.Check(e) {
+		defer tagFile.Close()
 		idBuf := make([]byte, 16)
 		if l, e := tagFile.Read(idBuf); err.Log(e) && l == 16 {
 			id = HashFromBytes(idBuf)
@@ -134,6 +139,13 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 	if id == nil {
 		id = ins.generateResourceId(hash, pathNodes[0])
 	}
+  if old, ok := ins.directories[id.String()]; ok {
+    //this (probably) means the directory was deleted and added again.
+    old.tagged = tagged
+    old.PathNodes.nodes = append(old.PathNodes.nodes, pathNodes...)
+    err.Debug(old.PathNodes.Last().FullPath())
+    return old
+  }
 	dir := &Directory{
 		Resource: &Resource{
 			ID:        id,
@@ -156,8 +168,8 @@ func (ins *Instance) AddDirectoryWithPath(hash *Hash, pathNodes ...*PathNode) *D
 }
 
 func (dir *Directory) WriteTag() {
-	if !dir.tagged {
-		tagFile, e := os.Create(dir.FullPath() + ".tag.collection")
+	if pn := dir.PathNodes.Last(); !dir.tagged && !pn.IsDeleted() {
+		tagFile, e := fs.Create(dir.FullPath() + ".tag.collection")
 		if err.Log(e) {
 			defer tagFile.Close()
 			tagFile.Write(dir.ID[:])

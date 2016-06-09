@@ -25,15 +25,16 @@ type Instance struct {
 	root        *Directory
 	settings    map[string]string
 	dirty       bool
+	isNew       bool
 }
 
 func (ins *Instance) generateResourceId(hash *Hash, path *PathNode) *Hash {
-	if readOnlyId, ok := ins.settings["readonly"]; ok && len(readOnlyId) == readOnlyIdLen {
+	if readOnlyId := ins.GetSetting("read only"); len(readOnlyId) == readOnlyIdLen {
 		out := append(hash[:], []byte(readOnlyId)...)
 		hashOut := Hash(md5.Sum(out))
 		err.Debug(hashOut)
 		return &hashOut
-	} else if ins.settings["AllowDuplicates"] == "false" {
+	} else if ins.GetSetting("allow duplicates") == "false" {
 		return hash
 	}
 	out := append(hash[:], []byte(path.Name)...)
@@ -67,10 +68,10 @@ func (ins *Instance) PathNodeFromHash(parentID *Hash, name string) *PathNode {
 //both are used as sets, not maps
 type deltaSelf struct {
 	added         []string
-	removed       map[string]*Resource
-	removedByHash map[string]*Resource
+	removed       map[string]*Resource // path -> resource
+	removedByHash map[string]*Resource // hash -> resource
 	ins           *Instance
-	deleted       map[string]*Resource
+	deleted       map[string]*Resource // id -> resource
 }
 
 // SelfDiff
@@ -109,7 +110,7 @@ func (ins *Instance) SelfDiff() *deltaSelf {
 	}
 	filepath.Walk(ins.pathStr, diff.add)
 	for _, res := range diff.removed {
-		err.Debug("Removed: ", res.RelativePath().String())
+    err.Debug("Remv hash: ", res.RelativePath())
 		diff.removedByHash[res.Hash.String()] = res
 	}
 	/**
@@ -126,21 +127,26 @@ func (ins *Instance) SelfUpdate() {
 	diff := ins.SelfDiff()
 	linkDirectories := make([]*Directory, 0)
 	for _, newPathStr := range diff.added {
+		ins.dirty = true
 		newPath := PathFromString(newPathStr, ins.pathStr) //*Path
 		pathNode := ins.PathToNode(newPath)                //*PathNode
 		hash, isDir, size := newPath.Stat()
 		if res, ok := diff.removedByHash[hash.String()]; ok {
 			// resource was moved
+      err.Debug("Moved: ", res.FullPath())
+      err.Debug("To: ", newPathStr)
 			delete(diff.removed, res.FullPath())
 			delete(diff.removedByHash, hash.String())
 			res.PathNodes.Add(pathNode)
 		} else {
+			err.Debug(diff.deleted[hash.String()])
 			// resource is new
 			if isDir {
 				linkDirectories = append(linkDirectories, ins.AddDirectoryWithPath(hash, pathNode))
 			} else {
 				err.Debug("Added: ", newPathStr)
-				ins.AddResourceWithPath(hash, size, pathNode)
+				r := ins.AddResourceWithPath(hash, size, pathNode)
+				err.Debug(r.Size, size)
 			}
 		}
 
@@ -150,12 +156,13 @@ func (ins *Instance) SelfUpdate() {
 		}
 	}
 	for _, res := range diff.removed {
+		ins.dirty = true
 		res.PathNodes.Add(ins.PathNodeFromHash(nil, ".deleted"))
 	}
 }
 
 // add adds a path to a deltaSelf. If the path is in "removed"
-// then it's a know resource and it's removed from removed
+// then it's a known resource and it's removed from removed
 // if not, then it's a new resources and is added to added.
 func (d *deltaSelf) add(pathStr string, fi os.FileInfo, _ error) error {
 	if fi.IsDir() {
@@ -169,29 +176,37 @@ func (d *deltaSelf) add(pathStr string, fi os.FileInfo, _ error) error {
 	if res, ok := d.removed[pathStr]; ok && d.ins.pathEqualsResource(res, pathStr) {
 		delete(d.removed, pathStr)
 	} else {
-		err.Debug("Added: ", pathStr)
 		d.added = append(d.added, pathStr)
 	}
 	return nil
 }
 
+// pathEqualsResource checks that a path and a resource at that path are
+// considered equal. With no special configuration, we assume they are
+// if either check hash or check length is true, we check that the file length
+// is the same. If the file length is different we return false (potentially
+// skipping the hash check). If check hash is true, we check the hash.
 func (ins *Instance) pathEqualsResource(res *Resource, pathStr string) bool {
-	if checkLen, ok := ins.settings["check file length"]; ok && checkLen == "true" {
-		if stat, e := os.Stat(pathStr); err.Warn(e) {
+	checkHash := false
+	if ins.GetSetting("static") == "false" {
+		checkHash = true
+	}
+	if checkLen := ins.GetSetting("check file length"); (checkLen == "true") || checkHash {
+		if stat, e := fs.Stat(pathStr); err.Warn(e) {
 			pathSize := stat.Size()
 			if stat.IsDir() {
 				pathSize = 0
 			}
 			if pathSize != res.Size {
-				err.Debug("SIZE DID NOT MATCH", stat.Size(), res.Size)
+				err.Debug("Size did not match", stat.Size(), res.Size, pathStr)
 				return false
 			}
 		}
 	}
-	if checkHash, ok := ins.settings["check file hash"]; res != ins.root.Resource && ok && checkHash == "true" {
+	if res != ins.root.Resource && checkHash {
 		hash, _, _ := PathFromString(pathStr, ins.pathStr).Stat()
-		if hash != res.Hash {
-			err.Debug("HASH DID NOT MATCH", hash, res.Hash)
+		if hash.String() != res.Hash.String() {
+			err.Debug("Hash did not match", hash, res.Hash, pathStr)
 			return false
 		}
 	}
@@ -262,7 +277,7 @@ func Unmarshal(buf []byte, pathStr string) *Instance {
 	if versionWrapper.Version != version {
 		// In the future, this will handle updating between versions
 		// but right now there is only version 1
-		panic("Incompatible Versions, check for update")
+		err.Debug("Version) Expected: ", version, " Got:", versionWrapper.Version)
 	}
 	sIns := &SerialInstance{}
 	proto.Unmarshal(versionWrapper.Instance, sIns)
@@ -293,7 +308,7 @@ func (ins *Instance) Write() {
 	if !ins.dirty {
 		return
 	}
-	if colFile, e := os.Create(ins.pathStr + "/.collection"); err.Log(e) {
+	if colFile, e := fs.Create(ins.pathStr + "/.collection"); err.Log(e) {
 		err.Debug("Writing: ", ins.pathStr)
 		defer colFile.Close()
 		colFile.Write(ins.Marshal())
@@ -308,7 +323,7 @@ func (ins *Instance) Write() {
 }
 
 func (ins *Instance) writeConfig() {
-	if configFile, e := os.Create(ins.pathStr + "/config.collection"); err.Log(e) {
+	if configFile, e := fs.Create(ins.pathStr + "/config.collection"); err.Log(e) {
 		defer configFile.Close()
 		ins.settings["id"] = ins.collection.IdStr()
 		for key, val := range ins.settings {
@@ -319,7 +334,7 @@ func (ins *Instance) writeConfig() {
 
 func Open(pathStr string) *Instance {
 	ins := loadInstance(pathStr)
-	settings := LoadConfig(pathStr + "/config.collection")
+	settings, _ := LoadConfig(pathStr + "/config.collection")
 	if ins == nil {
 		var c *Collection
 		if id, ok := settings["id"]; ok {
@@ -337,20 +352,20 @@ func Open(pathStr string) *Instance {
 		ins.dirty = true
 	}
 	ins.settings = settings
-	if toLower(settings["readonly"]) == "true" {
-		// if this is readonly, we need to give it a readonly ID
+	if toLower(settings["read only"]) == "true" {
+		// if this is readonly, we need to give it a read only ID
 		readOnlyId := make([]rune, readOnlyIdLen)
 		for i := 0; i < readOnlyIdLen; i++ {
 			readOnlyId[i] = rune((rand.Float32() * 24) + 65)
 		}
-		settings["readonly"] = string(readOnlyId)
+		settings["read only"] = string(readOnlyId)
 	}
 
 	return ins
 }
 
 func loadInstance(pathStr string) *Instance {
-	if colFile, e := os.Open(pathStr + "/.collection"); err.Check(e) {
+	if colFile, e := fs.Open(pathStr + "/.collection"); err.Check(e) {
 		defer colFile.Close()
 		if stat, e := colFile.Stat(); err.Log(e) {
 			b := make([]byte, stat.Size())
@@ -366,8 +381,6 @@ func loadInstance(pathStr string) *Instance {
 // despite my best efforts, unit testing has not caught all the errors, this
 // can help find additional errors under real conditions
 func (ins *Instance) BadInstanceScan() {
-	reset := err.DebugEnabled
-	err.DebugEnabled = true
 
 	for _, d := range ins.directories {
 		pathNode := d.PathNodes.Last()
@@ -402,7 +415,6 @@ func (ins *Instance) BadInstanceScan() {
 		}
 	}
 
-	err.DebugEnabled = reset
 }
 
 func (p *PathNode) getRoot() (*PathNode, bool) {
@@ -418,4 +430,20 @@ func (p *PathNode) getRoot() (*PathNode, bool) {
 		return nil, false
 	}
 	return last.getRoot()
+}
+
+var instanceDefaults = map[string]string{
+	"static":           "true",
+	"read only":        "false",
+	"allow duplicates": "true",
+}
+
+func (ins *Instance) GetSetting(key string) string {
+	if val, ok := ins.settings[key]; ok {
+		return val
+	}
+	if val, ok := instanceDefaults[key]; ok {
+		return val
+	}
+	return ""
 }

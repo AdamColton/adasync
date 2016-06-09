@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/adamcolton/adasync/collection"
 	"github.com/adamcolton/err"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -33,17 +34,19 @@ func (_ SyncAll) Run() {
 }
 
 func main() {
-	err.DebugEnabled = true
+	out, _ := os.Create("log.txt")
+	err.DebugOut = out
+	err.Debug("Started")
 	path, e := filepath.Abs("./")
 	err.Panic(e)
 	path = filepath.ToSlash(path)
-	settings := collection.LoadConfig(path + "config.txt")
+	settings, _ := collection.LoadConfig(path + "config.txt")
 	if ignore, ok := settings["ignore"]; ok {
 		collection.Settings["ignore"] = ignore
 		err.Debug("Ignoring: ", ignore)
 	} else {
 		collection.Settings["ignore"] = collection.DefaultIgnore
-		err.Debug("No ignore setting")
+		err.Debug("No ignore setting - using defaults")
 	}
 	runChan := make(chan Runable, 100)
 	go func(runChan <-chan Runable) {

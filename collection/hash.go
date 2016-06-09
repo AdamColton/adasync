@@ -9,14 +9,12 @@ import (
 type Hash [md5.Size]byte
 
 func HashFromBytes(bs []byte) *Hash {
-	if len(bs) != 16 {
-		panic("Requires 16 bytes")
+	if len(bs) != md5.Size {
+		panic("Requires bytes equals md5.Size")
 	}
-	hash := &Hash{}
-	for i, b := range bs {
-		hash[i] = b
-	}
-	return hash
+	hash := Hash{}
+	copy(hash[:], bs)
+	return &hash
 }
 
 func (hash *Hash) String() string {
@@ -27,7 +25,7 @@ func (a *Hash) Equal(b *Hash) bool {
 	if a == nil && b == nil {
 		return true
 	}
-	if (a == nil && b != nil) || (a != nil && b == nil) {
+	if a == nil || b == nil {
 		return false
 	}
 	return bytes.Equal(a[:], b[:])

@@ -2,10 +2,6 @@
 
 package collection
 
-import (
-	"os"
-)
-
 /*
 TODO: option to only scan new drives
 */
@@ -37,7 +33,7 @@ func detectDrives() ([]string, []string) {
 	i := 0
 	for letter := 'A'; letter <= 'Z'; letter++ {
 		path := string(letter) + ":\\"
-		if _, e := os.Open(path); e != nil {
+		if _, e := fs.Open(path); e != nil {
 			continue
 		}
 		drvs = append(drvs, path)

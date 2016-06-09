@@ -44,7 +44,7 @@ var media = []string{}
 func (lp *linuxPaths) getMedia(subPath string, _ os.FileInfo, _ error) error {
 	segments := strings.Split(subPath, "/")
 	if len(segments) == 4 {
-		if stat, e := os.Stat(subPath); err.Log(e) && stat.IsDir() {
+		if stat, e := fs.Stat(subPath); err.Log(e) && stat.IsDir() {
 			lp.all = append(lp.all, subPath)
 			isNew := true
 			for _, path := range media {
