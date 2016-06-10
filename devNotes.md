@@ -19,6 +19,7 @@ It might be better to do a tag check when we encounter a directory...
 I have no idea what the hell I was thinking - but directory tags are screwed up. I thought that for a directory, the hash and the ID are always the same thing, but they are not. And when I write the tag, I'm using the ID, but checking it like it's the hash. I've mostly got it working, but I want to go back and make it consistent.
 
 -- Todo --
+* de-dup: when doing a self scan, if two files have the same hash delete one of them.
 * when checking a file, we could potentially compute the hash twice, that seems wasteful
 * Let the user set the collection ID or read only ID
 * If config.collection is deleted, delete .collection

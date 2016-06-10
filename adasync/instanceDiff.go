@@ -40,9 +40,7 @@ type deltaSelf struct {
 	deleted       map[string]*Resource // id -> resource
 }
 
-// add adds a path to a deltaSelf. If the path is in "removed"
-// then it's a known resource and it's removed from removed
-// if not, then it's a new resources and is added to added.
+// addDirs is used to walk the directory
 func (d *deltaSelf) addDirs(pathStr string, fi os.FileInfo, _ error) error {
 	if !fi.IsDir() {
 		return nil

@@ -25,12 +25,17 @@ type Instance struct {
 	isNew       bool
 }
 
+// generateResourceId takes a resource hash and path and will generate an ID
+// the process depends on instance settings.
+// If the instance is read-only, the read-only value is appended to the hash
+// and a new hash is generated
+// If the instance does not allow duplicates
 func (ins *Instance) generateResourceId(hash *Hash, path *PathNode) *Hash {
 	if readOnlyId := ins.GetSetting("read only"); len(readOnlyId) == readOnlyIdLen {
 		out := append(hash[:], []byte(readOnlyId)...)
-		hashOut := Hash(md5.Sum(out))
-		err.Debug(hashOut)
-		return &hashOut
+		id := Hash(md5.Sum(out))
+		err.Debug(id)
+		return &id
 	} else if ins.GetSetting("allow duplicates") == "false" {
 		return hash
 	}
@@ -39,8 +44,19 @@ func (ins *Instance) generateResourceId(hash *Hash, path *PathNode) *Hash {
 	if parent != nil {
 		out = append(out, parent.ID[:]...)
 	}
-	hashOut := Hash(md5.Sum(out))
-	return &hashOut
+	id := Hash(md5.Sum(out))
+	for {
+		if _, idExists := ins.directories[id.String()]; idExists {
+			id = Hash(md5.Sum(id.Bytes()))
+			continue
+		}
+		if _, idExists := ins.resources[id.String()]; idExists {
+			id = Hash(md5.Sum(id.Bytes()))
+			continue
+		}
+		break
+	}
+	return &id
 }
 
 func (ins *Instance) PathNode(parent *Directory, name string) *PathNode {
@@ -150,6 +166,10 @@ func (ins *Instance) writeConfig() {
 	if configFile, e := filesystem.Create(ins.pathStr + "/config.collection"); err.Log(e) {
 		defer configFile.Close()
 		ins.settings["id"] = ins.collection.IdStr()
+		// write out all the default settings values
+		for key, _ := range instanceDefaults {
+			ins.settings[key] = ins.GetSetting(key)
+		}
 		for key, val := range ins.settings {
 			configFile.Write([]byte(key + ":" + val + "\n"))
 		}
@@ -222,6 +242,8 @@ var instanceDefaults = map[string]string{
 	"allow duplicates": "true",
 }
 
+// GetSetting will return the setting for the instance. If the instance does
+// not have a value for a standard setting, it will return the default value
 func (ins *Instance) GetSetting(key string) string {
 	if val, ok := ins.settings[key]; ok {
 		return val

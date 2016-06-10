@@ -21,6 +21,10 @@ func (hash *Hash) String() string {
 	return base64.StdEncoding.EncodeToString(hash[:])
 }
 
+func (hash *Hash) Bytes() []byte {
+	return hash[:]
+}
+
 func (a *Hash) Equal(b *Hash) bool {
 	if a == nil && b == nil {
 		return true
